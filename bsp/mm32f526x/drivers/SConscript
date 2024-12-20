@@ -13,7 +13,7 @@ board.c
 """)
 
 # add serial driver code
-if  GetDepend('BSP_USING_UART1') or GetDepend('BSP_USING_UART2'):
+if  GetDepend('BSP_USING_UART1') or GetDepend('BSP_USING_UART2') or GetDepend('BSP_USING_UART3'):
     src += ['drv_uart.c']
 
 # add gpio driver code
