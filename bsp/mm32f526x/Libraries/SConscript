@@ -1,0 +1,16 @@
+from building import *
+import rtconfig
+cwd     = GetCurrentDir()
+src = ['MM32F526x/Source/system_mm32f526x.c']
+CPPPATH = [cwd + '/CMSIS/KEIL_Core', cwd + '/MM32F526x/Include',  cwd + '/MM32F526x/Source', cwd + '/MM32F526x/HAL_Lib/Inc']
+
+src += Glob('MM32F526x/HAL_Lib/Src/*.c')
+CPPDEFINES = ['USE_STDPERIPH_DRIVER']
+
+if rtconfig.PLATFORM in ['armcc', 'armclang']:
+    src += ['MM32F526x/Source/KEIL_StartAsm/startup_mm32f526x_keil.s']
+elif rtconfig.PLATFORM in ['iccarm']:
+    src += ['MM32F526x/Source/IAR_StartAsm/startup_mm32f526x_iar.s']
+group = DefineGroup('Libraries', src, depend = [''], CPPPATH = CPPPATH, CPPDEFINES = CPPDEFINES)
+
+Return('group')
