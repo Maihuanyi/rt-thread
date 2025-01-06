@@ -14,7 +14,7 @@
 #include "hal_device.h"
 #include "mm32_device.h"
 
-#define SRAM_SIZE 0x20000
+#define SRAM_SIZE 0x1C000
 
 #define SRAM_END (SRAM_BASE + SRAM_SIZE)
 #ifdef __CC_ARM

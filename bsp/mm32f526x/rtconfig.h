@@ -140,6 +140,8 @@
 #define RT_USING_SERIAL
 #define RT_USING_SERIAL_V1
 #define RT_SERIAL_RB_BUFSZ 64
+#define RT_USING_I2C
+#define RT_USING_I2C_BITOPS
 #define RT_USING_PIN
 /* end of Device Drivers */
 
@@ -379,6 +381,9 @@
 
 #define BSP_USING_UART3
 /* end of UART Drivers */
+#define BSP_USING_I2C1
+#define BSP_I2C1_SCL_PIN 40
+#define BSP_I2C1_SDA_PIN 39
 
 /* Flash Drivers */
 

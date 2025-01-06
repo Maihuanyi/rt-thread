@@ -1,137 +1,294 @@
-/* Program Entry, set to mark it as "used" and avoid gc */
+
+
+/*
+ *-------- <<< Use Configuration Wizard in Context Menu >>> -------------------
+ */
+
+/*---------------------- Flash Configuration ----------------------------------
+  <h> Flash Configuration
+    <o0> Flash Base Address <0x0-0xFFFFFFFF:8>
+    <o1> Flash Size (in Bytes) <0x0-0xFFFFFFFF:8>
+  </h>
+  -----------------------------------------------------------------------------*/
+__ROM_BASE = 0x08000000;
+__ROM_SIZE = 0x00040000;
+
+/*--------------------- Embedded RAM Configuration ----------------------------
+  <h> RAM Configuration
+    <o0> RAM Base Address    <0x0-0xFFFFFFFF:8>
+    <o1> RAM Size (in Bytes) <0x0-0xFFFFFFFF:8>
+  </h>
+ -----------------------------------------------------------------------------*/
+__RAM_BASE = 0x30000000;
+__RAM_SIZE = 0x0001C000;
+
+/*--------------------- Stack / Heap Configuration ----------------------------
+  <h> Stack / Heap Configuration
+    <o0> Stack Size (in Bytes) <0x0-0xFFFFFFFF:8>
+    <o1> Heap Size (in Bytes) <0x0-0xFFFFFFFF:8>
+  </h>
+  -----------------------------------------------------------------------------*/
+__STACK_SIZE = 0x00001000;
+__HEAP_SIZE  = 0x00001000;
+
+/*
+ *-------------------- <<< end of configuration section >>> -------------------
+ */
+
+/* ARMv8-M stack sealing:
+   to use ARMv8-M stack sealing set __STACKSEAL_SIZE to 8 otherwise keep 0
+ */
+__STACKSEAL_SIZE = 0;
+
+
 MEMORY
 {
-    CODE (rx) : ORIGIN = 0x08000000, LENGTH = 256k /* 256KB flash */
-    DATA (rw) : ORIGIN = 0x30000000, LENGTH =  128K /* 128K sram */
+  FLASH (rx)  : ORIGIN = __ROM_BASE, LENGTH = __ROM_SIZE
+  RAM   (rwx) : ORIGIN = __RAM_BASE, LENGTH = __RAM_SIZE
 }
+
+/* Linker script to place sections and symbol values. Should be used together
+ * with other linker script that defines memory regions FLASH and RAM.
+ * It references following symbols, which must be defined in code:
+ *   Reset_Handler : Entry of reset handler
+ *
+ * It defines following symbols, which code can use without definition:
+ *   __exidx_start
+ *   __exidx_end
+ *   __copy_table_start__
+ *   __copy_table_end__
+ *   __zero_table_start__
+ *   __zero_table_end__
+ *   __etext
+ *   __data_start__
+ *   __preinit_array_start
+ *   __preinit_array_end
+ *   __init_array_start
+ *   __init_array_end
+ *   __fini_array_start
+ *   __fini_array_end
+ *   __data_end__
+ *   __bss_start__
+ *   __bss_end__
+ *   __end__
+ *   end
+ *   __HeapLimit
+ *   __StackLimit
+ *   __StackTop
+ *   __stack
+ *   __StackSeal      (only if ARMv8-M stack sealing is used)
+ */
 ENTRY(Reset_Handler)
-_system_stack_size = 0x200;
 
 SECTIONS
 {
-    .text :
-    {
-        . = ALIGN(4);
-        _stext = .;
-        KEEP(*(.isr_vector))            /* Startup code */
-        . = ALIGN(4);
-        *(.text)                        /* remaining code */
-        *(.text.*)                      /* remaining code */
-        *(.rodata)                      /* read-only data (constants) */
-        *(.rodata*)
-        *(.glue_7)
-        *(.glue_7t)
-        *(.gnu.linkonce.t*)
+  .text :
+  {
+    KEEP(*(.vectors))
+    *(.text*)
 
-        /* section information for finsh shell */
-        . = ALIGN(4);
-        __fsymtab_start = .;
-        KEEP(*(FSymTab))
-        __fsymtab_end = .;
-        . = ALIGN(4);
-        __vsymtab_start = .;
-        KEEP(*(VSymTab))
-        __vsymtab_end = .;
-        . = ALIGN(4);
+    KEEP(*(.init))
+    KEEP(*(.fini))
 
-        /* section information for initial. */
-        . = ALIGN(4);
-        __rt_init_start = .;
-        KEEP(*(SORT(.rti_fn*)))
-        __rt_init_end = .;
-        . = ALIGN(4);
+    /* .ctors */
+    *crtbegin.o(.ctors)
+    *crtbegin?.o(.ctors)
+    *(EXCLUDE_FILE(*crtend?.o *crtend.o) .ctors)
+    *(SORT(.ctors.*))
+    *(.ctors)
 
-        . = ALIGN(4);
-        _etext = .;
-    } > CODE = 0
+    /* .dtors */
+    *crtbegin.o(.dtors)
+    *crtbegin?.o(.dtors)
+    *(EXCLUDE_FILE(*crtend?.o *crtend.o) .dtors)
+    *(SORT(.dtors.*))
+    *(.dtors)
 
-    /* .ARM.exidx is sorted, so has to go in its own output section.  */
-    __exidx_start = .;
-    .ARM.exidx :
-    {
-        *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+    *(.rodata*)
 
-        /* This is used by the startup in order to initialize the .data secion */
-        _sidata = .;
-    } > CODE
-    __exidx_end = .;
+    KEEP(*(.eh_frame*))
+  } > FLASH
 
-    /* .data section which is used for initialized data */
+  /*
+   * SG veneers:
+   * All SG veneers are placed in the special output section .gnu.sgstubs. Its start address
+   * must be set, either with the command line option ��--section-start�� or in a linker script,
+   * to indicate where to place these veneers in memory.
+   */
+/*
+  .gnu.sgstubs :
+  {
+    . = ALIGN(32);
+  } > FLASH
+*/
+  .ARM.extab :
+  {
+    *(.ARM.extab* .gnu.linkonce.armextab.*)
+  } > FLASH
 
-    .data : AT (_sidata)
-    {
-        . = ALIGN(4);
-        /* This is used by the startup in order to initialize the .data secion */
-        _sdata = . ;
+  __exidx_start = .;
+  .ARM.exidx :
+  {
+    *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+  } > FLASH
+  __exidx_end = .;
 
-        *(.data)
-        *(.data.*)
-        *(.gnu.linkonce.d*)
+  .copy.table :
+  {
+    . = ALIGN(4);
+    __copy_table_start__ = .;
 
-        . = ALIGN(4);
-        /* This is used by the startup in order to initialize the .data secion */
-        _edata = . ;
-    } >DATA
+    LONG (__etext)
+    LONG (__data_start__)
+    LONG ((__data_end__ - __data_start__) / 4)
 
-    .stack :
-    {
-        . = . + _system_stack_size;
-        . = ALIGN(4);
-        _estack = .;
-    } >DATA
+    /* Add each additional data section here */
+/*
+    LONG (__etext2)
+    LONG (__data2_start__)
+    LONG ((__data2_end__ - __data2_start__) / 4)
+*/
+    __copy_table_end__ = .;
+  } > FLASH
 
-    __bss_start = .;
-    .bss :
-    {
-        . = ALIGN(4);
-        /* This is used by the startup in order to initialize the .bss secion */
-        _sbss = .;
+  .zero.table :
+  {
+    . = ALIGN(4);
+    __zero_table_start__ = .;
+    /* Add each additional bss section here */
+/*
+    LONG (__bss2_start__)
+    LONG ((__bss2_end__ - __bss2_start__) / 4)
+*/
+    __zero_table_end__ = .;
+  } > FLASH
 
-        *(.bss)
-        *(.bss.*)
-        *(COMMON)
+  /**
+   * Location counter can end up 2byte aligned with narrow Thumb code but
+   * __etext is assumed by startup code to be the LMA of a section in RAM
+   * which must be 4byte aligned
+   */
+  __etext = ALIGN (4);
 
-        . = ALIGN(4);
-        /* This is used by the startup in order to initialize the .bss secion */
-        _ebss = . ;
+  .data : AT (__etext)
+  {
+    __data_start__ = .;
+    *(vtable)
+    *(.data)
+    *(.data.*)
 
-        *(.bss.init)
-    } > DATA
-    __bss_end = .;
+    . = ALIGN(4);
+    /* preinit data */
+    PROVIDE_HIDDEN (__preinit_array_start = .);
+    KEEP(*(.preinit_array))
+    PROVIDE_HIDDEN (__preinit_array_end = .);
 
-    _end = .;
+    . = ALIGN(4);
+    /* init data */
+    PROVIDE_HIDDEN (__init_array_start = .);
+    KEEP(*(SORT(.init_array.*)))
+    KEEP(*(.init_array))
+    PROVIDE_HIDDEN (__init_array_end = .);
 
-    /* Stabs debugging sections.  */
-    .stab          0 : { *(.stab) }
-    .stabstr       0 : { *(.stabstr) }
-    .stab.excl     0 : { *(.stab.excl) }
-    .stab.exclstr  0 : { *(.stab.exclstr) }
-    .stab.index    0 : { *(.stab.index) }
-    .stab.indexstr 0 : { *(.stab.indexstr) }
-    .comment       0 : { *(.comment) }
-    /* DWARF debug sections.
-     * Symbols in the DWARF debugging sections are relative to the beginning
-     * of the section so we begin them at 0.  */
-    /* DWARF 1 */
-    .debug          0 : { *(.debug) }
-    .line           0 : { *(.line) }
-    /* GNU DWARF 1 extensions */
-    .debug_srcinfo  0 : { *(.debug_srcinfo) }
-    .debug_sfnames  0 : { *(.debug_sfnames) }
-    /* DWARF 1.1 and DWARF 2 */
-    .debug_aranges  0 : { *(.debug_aranges) }
-    .debug_pubnames 0 : { *(.debug_pubnames) }
-    /* DWARF 2 */
-    .debug_info     0 : { *(.debug_info .gnu.linkonce.wi.*) }
-    .debug_abbrev   0 : { *(.debug_abbrev) }
-    .debug_line     0 : { *(.debug_line) }
-    .debug_frame    0 : { *(.debug_frame) }
-    .debug_str      0 : { *(.debug_str) }
-    .debug_loc      0 : { *(.debug_loc) }
-    .debug_macinfo  0 : { *(.debug_macinfo) }
-    /* SGI/MIPS DWARF 2 extensions */
-    .debug_weaknames 0 : { *(.debug_weaknames) }
-    .debug_funcnames 0 : { *(.debug_funcnames) }
-    .debug_typenames 0 : { *(.debug_typenames) }
-    .debug_varnames  0 : { *(.debug_varnames) }
+    . = ALIGN(4);
+    /* finit data */
+    PROVIDE_HIDDEN (__fini_array_start = .);
+    KEEP(*(SORT(.fini_array.*)))
+    KEEP(*(.fini_array))
+    PROVIDE_HIDDEN (__fini_array_end = .);
+
+    KEEP(*(.jcr*))
+    . = ALIGN(4);
+    /* All data end */
+    __data_end__ = .;
+
+  } > RAM
+
+  /*
+   * Secondary data section, optional
+   *
+   * Remember to add each additional data section
+   * to the .copy.table above to asure proper
+   * initialization during startup.
+   */
+/*
+  __etext2 = ALIGN (4);
+
+  .data2 : AT (__etext2)
+  {
+    . = ALIGN(4);
+    __data2_start__ = .;
+    *(.data2)
+    *(.data2.*)
+    . = ALIGN(4);
+    __data2_end__ = .;
+
+  } > RAM2
+*/
+
+  .bss :
+  {
+    . = ALIGN(4);
+    __bss_start__ = .;
+    *(.bss)
+    *(.bss.*)
+    *(COMMON)
+    . = ALIGN(4);
+    __bss_end__ = .;
+  } > RAM AT > RAM
+
+  /*
+   * Secondary bss section, optional
+   *
+   * Remember to add each additional bss section
+   * to the .zero.table above to asure proper
+   * initialization during startup.
+   */
+/*
+  .bss2 :
+  {
+    . = ALIGN(4);
+    __bss2_start__ = .;
+    *(.bss2)
+    *(.bss2.*)
+    . = ALIGN(4);
+    __bss2_end__ = .;
+  } > RAM2 AT > RAM2
+*/
+
+  .heap (COPY) :
+  {
+    . = ALIGN(8);
+    __end__ = .;
+    PROVIDE(end = .);
+    . = . + __HEAP_SIZE;
+    . = ALIGN(8);
+    __HeapLimit = .;
+  } > RAM
+
+  .stack (ORIGIN(RAM) + LENGTH(RAM) - __STACK_SIZE - __STACKSEAL_SIZE) (COPY) :
+  {
+    . = ALIGN(8);
+    __StackLimit = .;
+    . = . + __STACK_SIZE;
+    . = ALIGN(8);
+    __StackTop = .;
+  } > RAM
+  PROVIDE(__stack = __StackTop);
+
+  /* ARMv8-M stack sealing:
+     to use ARMv8-M stack sealing uncomment '.stackseal' section
+   */
+/*
+  .stackseal (ORIGIN(RAM) + LENGTH(RAM) - __STACKSEAL_SIZE) (COPY) :
+  {
+    . = ALIGN(8);
+    __StackSeal = .;
+    . = . + 8;
+    . = ALIGN(8);
+  } > RAM
+*/
+
+  /* Check if data + heap + stack exceeds RAM limit */
+  ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed with stack")
 }
