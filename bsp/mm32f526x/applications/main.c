@@ -8,18 +8,16 @@
 
 #include <rtthread.h>
 #include <rtdevice.h>
-#include "hal_device.h"
 
 /* defined the LED pin: PB15 */
 #define LED_PIN    31
 
 int main(void)
 {
-   int count = 1;
     /* set LED1 pin mode to output */
     rt_pin_mode(LED_PIN, PIN_MODE_OUTPUT);
 
-    while (count++) {
+    while (1) {
         rt_pin_write(LED_PIN, PIN_HIGH);
         rt_thread_mdelay(500);
         rt_pin_write(LED_PIN, PIN_LOW);
@@ -28,3 +26,4 @@ int main(void)
 
     return RT_EOK;
 }
+
