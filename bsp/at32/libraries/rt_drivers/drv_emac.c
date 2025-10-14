@@ -847,7 +847,6 @@ static void phy_linkchange()
         phy_speed = phy_speed_new;
         if (phy_speed & PHY_LINK)
         {
-            LOG_D("link up");
             if (phy_speed & PHY_10M)
             {
                 LOG_D("10Mbps");
@@ -870,7 +869,15 @@ static void phy_linkchange()
                 at32_emac_device.emac_mode = EMAC_HALF_DUPLEX;
             }
 
+            /* eth device initialization failed. Initialize it again. */
+            if (!(at32_emac_device.parent.parent.flag & RT_DEVICE_FLAG_ACTIVATED))
+            {
+                if (RT_EOK != at32_emac_device.parent.parent.init(&(at32_emac_device.parent.parent)))
+                    return;
+            }
+
             /* send link up. */
+            LOG_D("link up");
             eth_device_linkchange(&at32_emac_device.parent, RT_TRUE);
         }
         else
@@ -895,9 +902,10 @@ static void emac_phy_isr(void *args)
 
 static void phy_monitor_thread_entry(void *parameter)
 {
+    uint8_t temp_addr = 0xFF;
     uint8_t detected_count = 0;
 
-    while(phy_addr == 0xFF)
+    while(temp_addr == 0xFF)
     {
         /* phy search */
         rt_uint32_t i, temp;
@@ -907,7 +915,7 @@ static void phy_monitor_thread_entry(void *parameter)
 
             if (temp != 0xFFFF && temp != 0x00)
             {
-                phy_addr = i;
+                temp_addr = i;
                 break;
             }
         }
@@ -921,34 +929,15 @@ static void phy_monitor_thread_entry(void *parameter)
         }
     }
 
-    LOG_D("Found a phy, address:0x%02X", phy_addr);
+    LOG_D("Found a phy, address:0x%02X", temp_addr);
 
     /* reset phy */
     LOG_D("RESET PHY!");
-    emac_phy_register_write(phy_addr, PHY_BASIC_CONTROL_REG, PHY_RESET_MASK);
+    emac_phy_register_write(temp_addr, PHY_BASIC_CONTROL_REG, PHY_RESET_MASK);
     rt_thread_mdelay(2000);
-    emac_phy_register_write(phy_addr, PHY_BASIC_CONTROL_REG, PHY_AUTO_NEGOTIATION_MASK);
+    emac_phy_register_write(temp_addr, PHY_BASIC_CONTROL_REG, PHY_AUTO_NEGOTIATION_MASK);
 
-    phy_linkchange();
-#ifdef PHY_USING_INTERRUPT_MODE
-    /* configuration intterrupt pin */
-    rt_pin_mode(PHY_INT_PIN, PIN_MODE_INPUT_PULLUP);
-    rt_pin_attach_irq(PHY_INT_PIN, PIN_IRQ_MODE_FALLING, emac_phy_isr, (void *)"callbackargs");
-    rt_pin_irq_enable(PHY_INT_PIN, PIN_IRQ_ENABLE);
-
-    /* enable phy interrupt */
-    emac_phy_register_write(phy_addr, PHY_INTERRUPT_MASK_REG, PHY_INT_MASK);
-#if defined(PHY_INTERRUPT_CTRL_REG)
-    emac_phy_register_write(phy_addr, PHY_INTERRUPT_CTRL_REG, PHY_INTERRUPT_EN);
-#endif
-#else /* PHY_USING_INTERRUPT_MODE */
-    at32_emac_device.poll_link_timer = rt_timer_create("phylnk", (void (*)(void*))phy_linkchange,
-                                        NULL, RT_TICK_PER_SECOND, RT_TIMER_FLAG_PERIODIC);
-    if (!at32_emac_device.poll_link_timer || rt_timer_start(at32_emac_device.poll_link_timer) != RT_EOK)
-    {
-        LOG_E("Start link change detection timer failed");
-    }
-#endif /* PHY_USING_INTERRUPT_MODE */
+    phy_addr = temp_addr;
 }
 
 /* Register the EMAC device */
@@ -1064,6 +1053,27 @@ static int rt_hw_at32_emac_init(void)
         state = -RT_ERROR;
         goto __exit;
     }
+
+#ifdef PHY_USING_INTERRUPT_MODE
+    /* configuration intterrupt pin */
+    rt_pin_mode(PHY_INT_PIN, PIN_MODE_INPUT_PULLUP);
+    rt_pin_attach_irq(PHY_INT_PIN, PIN_IRQ_MODE_FALLING, emac_phy_isr, (void *)"callbackargs");
+    rt_pin_irq_enable(PHY_INT_PIN, PIN_IRQ_ENABLE);
+
+    /* enable phy interrupt */
+    emac_phy_register_write(phy_addr, PHY_INTERRUPT_MASK_REG, PHY_INT_MASK);
+#if defined(PHY_INTERRUPT_CTRL_REG)
+    emac_phy_register_write(phy_addr, PHY_INTERRUPT_CTRL_REG, PHY_INTERRUPT_EN);
+#endif
+#else /* PHY_USING_INTERRUPT_MODE */
+    at32_emac_device.poll_link_timer = rt_timer_create("phylnk", (void (*)(void*))phy_linkchange,
+                                        NULL, RT_TICK_PER_SECOND, RT_TIMER_FLAG_PERIODIC);
+    if (!at32_emac_device.poll_link_timer || rt_timer_start(at32_emac_device.poll_link_timer) != RT_EOK)
+    {
+        LOG_E("Start link change detection timer failed");
+    }
+#endif /* PHY_USING_INTERRUPT_MODE */
+
 __exit:
     if (state != RT_EOK)
     {
